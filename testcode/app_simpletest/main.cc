@@ -13,9 +13,18 @@ int main()
 
   auto pm = NCP::SansIsotropic( Q, I );
 
-  for ( auto ekin : NC::logspace(-15, 0, 10) ) {
-    std::cout << "cross section @ " << ekin  << " eV is "
-              << pm.calcCrossSection(ekin)  <<" barn" << std::endl;
+  // for ( auto ekin : NC::logspace(-15, 0, 10) ) {
+  //   std::cout << "cross section @ " << ekin  << " eV is "
+  //             << pm.calcCrossSection(ekin)  <<" barn" << std::endl;
+  // }
+
+  // test for speed
+  auto rng = NC::getRNG();
+  for(unsigned i=0;i<1000000;i++)
+  {
+    double wl = rng->generate()*5;
+    pm.calcCrossSection(NC::wl2ekin(wl));
+    pm.sampleScatteringEvent( *rng, NC::wl2ekin(wl) );
   }
 
   // auto rng = NC::getRNG();

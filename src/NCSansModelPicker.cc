@@ -41,34 +41,30 @@ void NCP::SansModelPicker::IqHardSphere(const NC::Info::CustomSectionData& data,
     NCRYSTAL_THROW2( BadInput,"Invalid values specified in the @CUSTOM_"<<pluginNameUpperCase()
                     <<" section radius" );
 
-  //solvent
-  NC::Info::CustomSectionData::const_iterator it_solvent=data.end();
-
-  try {
-    it_solvent=findCustomLineIter(data, "solvent");
-  } catch (NC::Error::BadInput&e) {
-    //I don't prevent no solvent
-  }
-
-  if(it_solvent!=data.end())
-  {
-    if(it_solvent->size()!=3)
-      NCRYSTAL_THROW2( BadInput,"radius in the @CUSTOM_"<<pluginNameUpperCase()
-                     <<" solvent field should prove two parameters" );
-    m_solvantCfg = it_solvent->at(1);
-
-    double solventfac (0.);
-    if ( !NC::safe_str2dbl( it_solvent->at(2), solventfac ) )
-      NCRYSTAL_THROW2( BadInput,"Invalid volume fraction specified in the @CUSTOM_"<<pluginNameUpperCase()
-                       <<" solvent " );
-    m_solvantCfg += ";packfact="+std::to_string(solventfac);
-    printf("m_solvantCfg %s\n", m_solvantCfg.c_str());
-  }
-
+  //phases
   double sld(0), numden(0);
-  sld = info.getSLD().dbl() * 0.01;  //in sqrt(barn)
-  numden = info.getNumberDensity().dbl();  // in atoms/Aa^3
-  printf("sdl %g, number density %g\n",sld, numden);
+  if(info.isMultiPhase())
+    printf("is multiphas\n");
+  else if(info.isSinglePhase())
+    printf("is single phase\n");
+
+
+  auto phaselist = info.getPhases();
+  if(phaselist.empty())
+  {
+    sld = info.getSLD().dbl() * 0.01 ;  //in sqrt(barn)
+    numden = info.getNumberDensity().dbl();  // in atoms/Aa^3
+    printf("sdl %g, number density %g\n",sld, numden);
+  }
+  else if(phaselist.size()==2)
+  {
+    printf("phase 0 %g\n", phaselist[0].second->getSLD().dbl());
+    printf("phase 1 %g\n", phaselist[1].second->getSLD().dbl());
+  }
+  else {
+    NCRYSTAL_THROW2(BadInput," @CUSTOM_"<<pluginNameUpperCase()<< " contains " <<  phaselist.size() << " Phases");
+  }
+
 
   // calSDL(info, sld, numden);
   // printf("sdl %g, number density %g\n",sld, numden);
