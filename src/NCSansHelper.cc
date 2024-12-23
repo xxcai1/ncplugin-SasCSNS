@@ -1,36 +1,5 @@
 #include "NCSansHelper.hh"
 
-bool NCPluginNamespace::calSDL(const NC::Info& info, double &scatLenDensity, double &numberDensity)
-{
-  scatLenDensity= 0.;
-  numberDensity =0.;
-  //calculate scattering length density from the dynamic info
-  if(info.hasDynamicInfo()&&info.hasNumberDensity())
-  {
-    numberDensity = info.getNumberDensity().dbl();   // in atoms/Aa^3
-    for (auto& dyn : info.getDynamicInfoList())
-    {
-      double scl = dyn->atomDataSP()->coherentScatLen(); //in sqrt(barn)
-      double frac = dyn->fraction();
-      scatLenDensity += scl*frac*numberDensity;
-    }
-  }
-  else if(info.hasStructureInfo()&&info.hasAtomPositions())
-  {
-    auto &strInfo = info.getStructureInfo();
-    double perVolume = 1./strInfo.volume;//Aa^3
-
-    for(auto it = info.atomInfoBegin(); it != info.atomInfoEnd(); ++it)
-    {
-      double scl = it->correspondingDynamicInfo()->atomDataSP()->coherentScatLen();
-      scatLenDensity += scl*perVolume*it->numberPerUnitCell();
-      numberDensity += it->numberPerUnitCell()*perVolume;
-    }
-  }
-  else
-    return false;
-  return true;
-}
 
 NC::Info::CustomSectionData::const_iterator NCPluginNamespace::findCustomLineIter(const NC::Info::CustomSectionData& data, const std::string& keyword, bool check)
 {

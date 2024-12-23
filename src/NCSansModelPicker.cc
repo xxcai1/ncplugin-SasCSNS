@@ -66,8 +66,12 @@ void NCP::SansModelPicker::IqHardSphere(const NC::Info::CustomSectionData& data,
   }
 
   double sld(0), numden(0);
-  calSDL(info, sld, numden);
+  sld = info.getSLD().dbl() * 0.01;  //in sqrt(barn)
+  numden = info.getNumberDensity().dbl();  // in atoms/Aa^3
   printf("sdl %g, number density %g\n",sld, numden);
+
+  // calSDL(info, sld, numden);
+  // printf("sdl %g, number density %g\n",sld, numden);
 
   double R=radius;
   double R3=R*R*R;
