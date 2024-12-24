@@ -29,7 +29,7 @@ namespace NCPluginNamespace {
     SansModelPicker(const NC::Info& info);
     IqCalType getIqCalType(const NC::Info::CustomSectionData& data) const;
     void IqDirectLoad(const NC::Info::CustomSectionData& data);
-    void IqHardSphere(const NC::Info::CustomSectionData& data, const NC::Info& info);
+    void IqHardSphere(const NC::Info::CustomSectionData& data, double sld, double numden);
     const std::vector<double>& getQ() const {return m_Q;}
     const std::vector<double>& getI() const {return m_I;}
 

@@ -4,6 +4,7 @@
 //Include various utilities from NCrystal's internal header files:
 #include "NCrystal/internal/NCString.hh"
 #include <vector>
+#include <iostream>
 
 bool NCP::SansModelPicker::isApplicable( const NC::Info& info )
 {
@@ -29,7 +30,7 @@ NCP::SansModelPicker::IqCalType NCP::SansModelPicker::getIqCalType(const NC::Inf
   return IqCalType::kUndefined;
 }
 
-void NCP::SansModelPicker::IqHardSphere(const NC::Info::CustomSectionData& data, const NC::Info& info)
+void NCP::SansModelPicker::IqHardSphere(const NC::Info::CustomSectionData& data, double sld, double numden)
 {
   //radius
   auto it_r=findCustomLineIter(data, "radius");
@@ -41,41 +42,13 @@ void NCP::SansModelPicker::IqHardSphere(const NC::Info::CustomSectionData& data,
     NCRYSTAL_THROW2( BadInput,"Invalid values specified in the @CUSTOM_"<<pluginNameUpperCase()
                     <<" section radius" );
 
-  //phases
-  double sld(0), numden(0);
-  if(info.isMultiPhase())
-    printf("is multiphas\n");
-  else if(info.isSinglePhase())
-    printf("is single phase\n");
-
-
-  auto phaselist = info.getPhases();
-  if(phaselist.empty())
-  {
-    sld = info.getSLD().dbl() * 0.01 ;  //in sqrt(barn)
-    numden = info.getNumberDensity().dbl();  // in atoms/Aa^3
-    printf("sdl %g, number density %g\n",sld, numden);
-  }
-  else if(phaselist.size()==2)
-  {
-    printf("phase 0 %g\n", phaselist[0].second->getSLD().dbl());
-    printf("phase 1 %g\n", phaselist[1].second->getSLD().dbl());
-  }
-  else {
-    NCRYSTAL_THROW2(BadInput," @CUSTOM_"<<pluginNameUpperCase()<< " contains " <<  phaselist.size() << " Phases");
-  }
-
-
-  // calSDL(info, sld, numden);
-  // printf("sdl %g, number density %g\n",sld, numden);
-
   double R=radius;
   double R3=R*R*R;
   double V = 4./3.*NC::kPi*R3;
   double atomNumInSphere = V*numden;
 
 
-  m_Q=NC::logspace(-6,10,1000);
+  m_Q=NC::logspace(-5, 2,100000);
   m_I.reserve(m_Q.size());
 
   for(double q:m_Q)
@@ -121,26 +94,79 @@ void NCP::SansModelPicker::IqDirectLoad(const NC::Info::CustomSectionData& data)
 }
 
 NCP::SansModelPicker::SansModelPicker( const NC::Info& info )
-:m_packfact(1.), m_volfact(1.)
 {
-  //Parse the content of our custom section. In case of syntax errors, we should
-  //raise BadInput exceptions, to make sure users gets understandable error
-  //messages. We should try to avoid other types of exceptions.
+  // std::cout << "data source " << info.getDataSourceName() << ", phases " << info.getPhases().size() << std::endl;
+  // std::cout << "Info density " << info.getNumberDensity().dbl() << std::endl;
+
+  auto phaselist = info.getPhases();
+  const NC::Info *sansinfo = nullptr;
+  double sld = 0;
+  double numden = 0;
+  if(phaselist.empty())
+  {
+    sld = info.getSLD().dbl() * 0.01 ;  //in sqrt(barn)
+    numden = info.getNumberDensity().dbl();  // in atoms/Aa^3
+    sansinfo = &info;
+  }
+  else if(phaselist.size()==2)
+  {
+    for(const auto& phase : phaselist)
+    {
+      const auto *ainfo = phase.second.get();
+      double frac = phase.first;
+      unsigned seccnt = ainfo->countCustomSections(pluginNameUpperCase());
+
+      if(seccnt == 1)
+      {
+        // the phase for the sans
+        sansinfo = ainfo;
+        numden = ainfo->getNumberDensity().dbl() * frac;
+        sld += ainfo->getSLD().dbl() * 0.01 ; 
+        std::cout << "sld seccnt == 1, sld " << sld 
+                  << ", frac " << frac 
+                  << ", numden " << numden << std::endl;
+      }
+      else if(seccnt==0)
+      {
+        // the phase for the solvent
+        sld -= ainfo->getSLD().dbl() * 0.01 ; 
+        std::cout << "sld seccnt == 0, " << sld 
+                  << ", frac " << frac 
+                  << ", numden " << ainfo->getNumberDensity().dbl() * frac << std::endl;
+
+      }
+      else
+      {
+        NCRYSTAL_THROW2(BadInput," @CUSTOM_"<<pluginNameUpperCase()<< " contains " <<  seccnt << " section");
+      }
+    }
+  }
+  else {
+    NCRYSTAL_THROW2(BadInput," info.getPhases()" << " contains " <<  phaselist.size() << " Phases");
+  }
+
+  if(!sansinfo)
+  {
+    NCRYSTAL_THROW2(BadInput," can not find the sans phase");
+  }
+
+
+
+  printf("sdl %g, number density %g\n",sld, numden);
 
 
   // unsigned numSec =  info.countCustomSections( pluginNameUpperCase() ); fixme
 
-    NC::Info::CustomSectionData data = info.getCustomSection( pluginNameUpperCase(), 0 );
+  NC::Info::CustomSectionData data = sansinfo->getCustomSection( pluginNameUpperCase(), 0 );
 
-    switch(getIqCalType(data)) {
-      case kDirectLoad:
-        IqDirectLoad(data);
-        break;
-      case kHardSphere:
-        IqHardSphere(data,info);
-        break;
-      default :
-        NCRYSTAL_THROW2(BadInput," @CUSTOM_"<<pluginNameUpperCase()<< " with undefined load method");
+  switch(getIqCalType(data)) {
+    case kDirectLoad:
+      IqDirectLoad(data);
+      break;
+    case kHardSphere:
+      IqHardSphere(data,std::abs(sld),numden);
+      break;
+    default :
+      NCRYSTAL_THROW2(BadInput," @CUSTOM_"<<pluginNameUpperCase()<< " with undefined load method");
   }
-
 }

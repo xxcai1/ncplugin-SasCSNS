@@ -12,6 +12,11 @@ namespace NCPluginNamespace {
 
   class PluginFactory final : public NC::FactImpl::ScatterFactory {
   public:
+    MultiPhaseCapability multiPhaseCapability() const override
+    {
+      return MultiPhaseCapability::Both;
+    }
+
     const char * name() const noexcept override;
     NC::Priority query( const NC::FactImpl::ScatterRequest& ) const override;
     NC::ProcImpl::ProcPtr produce( const NC::FactImpl::ScatterRequest& ) const override;

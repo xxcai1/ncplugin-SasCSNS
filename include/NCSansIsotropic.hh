@@ -7,6 +7,7 @@
 
 #include "NCLookUpTable.hh"
 #include "NCrystal/internal/NCPointwiseDist.hh"
+#include "NCrystal/internal/NCIofQHelper.hh"
 
 namespace NCPluginNamespace {
 
@@ -26,9 +27,8 @@ namespace NCPluginNamespace {
     ScatEvent sampleScatteringEvent( NC::RNG& rng, double neutron_ekin ) const;
 
   private:
-    //Data members:
+    NC::IofQHelper m_iofq;
     std::unique_ptr<LookUpTable> m_xs;
-    std::unique_ptr<NC::PointwiseDist> m_sansQDist;
   };
 
 }

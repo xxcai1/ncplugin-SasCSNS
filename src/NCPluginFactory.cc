@@ -3,6 +3,8 @@
 #include "NCSansIsotropic.hh"
 #include "NCrystal/internal/NCRandUtils.hh" // for randDirectionGivenScatterMu
 #include "NCSansModelPicker.hh"
+#include <iostream>
+#include "NCrystal/NCrystal.hh"
 
 namespace NCPluginNamespace {
 
@@ -40,9 +42,26 @@ const char * NCP::PluginFactory::name() const noexcept
 
 NC::Priority NCP::PluginFactory::query( const NC::FactImpl::ScatterRequest& cfg ) const
 {
-  if ( ! ( cfg.get_sans() && SansModelPicker::isApplicable(cfg.info()) ) )
-    return NC::Priority::Unable;
-  return NC::Priority{999};
+  
+  auto info = cfg.infoPtr();
+  auto phaselist  = info->getPhases();
+  if(phaselist.empty())
+  {
+    return SansModelPicker::isApplicable(*info) ? NC::Priority{999} : NC::Priority::Unable;
+  }
+  else
+  {
+    bool applicable = false;
+    for(const auto& phase: phaselist)
+    {
+      if (SansModelPicker::isApplicable(*phase.second) )
+      {
+        applicable = true;
+        break;
+      }        
+    }
+    return (applicable ? NC::Priority{999} : NC::Priority::Unable);
+  }
 }
 
 NC::ProcImpl::ProcPtr NCP::PluginFactory::produce( const NC::FactImpl::ScatterRequest& cfg ) const
