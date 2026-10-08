@@ -375,6 +375,48 @@ def case_zero_energy():
     return rows
 
 
+def case_ezero_expansion():
+    """S8: the E->0 Taylor expansion as a SHARP anchor. The disc is centred
+    at -k*a_perp (not at the origin), so expanding I about the origin and
+    angle-integrating (eq.~alphaint) gives
+      sigma = 4*pi*I0 - 4*pi*k*a_perp.grad I0
+              + k^2*[2*pi*a_perp^T H0 a_perp + (2*pi/3)*lap I0] + O(k^3).
+    For a LINEAR ramp the Taylor series terminates at first order, so the
+    formula is EXACT for any k (up to quadrature): the strongest closed-form
+    check of the first-order tilt coefficient in the model. For a wide
+    Gaussian the k^2 term is measurable and pins the curvature coefficient.
+    """
+    rows = []
+    # ---- L1: linear ramp, exact at any k -------------------------------
+    b = 0.5
+    n = 401
+    g = make_grid(0.8, n)
+    X, Y = np.meshgrid(g, g)
+    vals = 1.0 + b * X          # I >= 0.6 on the table, gradient (b, 0)
+    tab = Table2D(g, g, vals, 'ramp')
+    for k, beta, tag in [(0.3, 0.0, 'on-axis'),
+                         (0.3, 0.03, 'beta=30mrad'),
+                         (0.3, -0.03, 'beta=-30mrad (sign)'),
+                         (0.3, 0.2, 'beta=200mrad')]:
+        a_x = math.sin(beta)
+        exact = 4 * math.pi * (1.0 - b * k * a_x)
+        sig = sigma_table(tab, (a_x, 0.0, math.cos(beta)), k)
+        rows.append((f'S8 ramp: sigma exact linear formula ({tag})',
+                     exact, sig, 'rel', 1e-6))
+    # ---- L2: wide Gaussian, k^2 curvature coefficient ------------------
+    s_q = 1.0
+    g = make_grid(2.5, 401)
+    X, Y = np.meshgrid(g, g)
+    vals = np.exp(-(X ** 2 + Y ** 2) / (2 * s_q ** 2))
+    tab = Table2D(g, g, vals, 'widegauss')
+    k = k_of_e(0.1)             # the model's lowest energy node
+    sig = sigma_table(tab, (0, 0, 1), k)
+    approx = 4 * math.pi * (1.0 - k ** 2 / (3 * s_q ** 2))
+    rows.append(('S8 wide Gaussian E->0: sigma vs 4pi(1 - k^2/(3 s^2)) '
+                 '(O(k^3) residual)', approx, sig, 'rel', 1e-3))
+    return rows
+
+
 def case_single_pixel():
     """S4: one bright pixel. The disc (radius k) is large compared to the
     pixel, so sigma -> I0*dA/(k^2*|kf.z0|) and outcomes cluster at
@@ -552,7 +594,8 @@ CASES = [('S1 constant table', case_constant),
          ('S4 single pixel', case_single_pixel),
          ('S5 Gaussian', case_gaussian),
          ('S6 Airy/cylinder', case_cylinder),
-         ('S7 conventions', case_conventions)]
+         ('S7 conventions', case_conventions),
+         ('S8 E->0 expansion', case_ezero_expansion)]
 
 
 def main():

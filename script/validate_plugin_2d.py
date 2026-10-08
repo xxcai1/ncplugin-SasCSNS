@@ -105,6 +105,45 @@ def main():
     row('S1 plugin outcomes uniform on sphere (chi2 p)', 0.01,
         chi2dist.sf(c2, 19), 'p', None)
 
+    # ---------------- S8: E->0 expansion through the plugin ----------------
+    # Same construction as rung 2: the disc is centred at -k*a_perp, so
+    # sigma = 4*pi*I0 - 4*pi*k*a_perp.gradI0 (+ k^2 curvature). For the linear
+    # ramp this is EXACT at any k; the plugin should reproduce it up to the
+    # sigma-grid machinery only (s-node quadrature + bilinear interpolation of
+    # a function that is exactly linear in s; E = 0.1 meV is the lowest
+    # energy node, so no lnE interpolation error).
+    b = 0.5
+    n = 201
+    g = make_grid(0.8, n)
+    X, Y = np.meshgrid(g, g)
+    vals = 1.0 + b * X
+    tab = Table2D(g, g, vals, 'ramp')
+    p4 = write_ncmat('ramp', g, g, vals)
+    sc4 = NCrystal.createScatter(p4)
+    print(f'--- S8 E->0 expansion ({p4})', flush=True)
+    e_mev = 0.1
+    k = k_of_e(e_mev)
+    for beta, tag in [(0.0, 'on-axis'), (0.03, '30mrad'), (0.2, '200mrad')]:
+        a_x = math.sin(beta)
+        exact = 4 * math.pi * (1.0 - b * k * a_x)
+        #tilted rows: sigma-NODE midpoint-quadrature floor ~1e-4 rel (same
+        #floor as the S1 tilt rows); interpolation itself is exact (linear
+        #in s), on-axis serves the exact CDF total (1e-5)
+        row(f'S8 plugin ramp: sigma vs exact linear formula ({tag})',
+            exact, float(sc4.crossSection(e_mev * 1e-3,
+                                          (a_x, 0.0, math.cos(beta)))),
+            'rel', 3e-4)
+    # wide Gaussian: the k^2 curvature coefficient, O(k^3) residual 1.3e-4
+    s_q = 1.0
+    g = make_grid(2.5, 201)
+    X, Y = np.meshgrid(g, g)
+    vals = np.exp(-(X ** 2 + Y ** 2) / (2 * s_q ** 2))
+    p5 = write_ncmat('widegauss', g, g, vals)
+    sc5 = NCrystal.createScatter(p5)
+    approx = 4 * math.pi * (1.0 - k ** 2 / (3 * s_q ** 2))
+    row('S8 plugin wide Gaussian: sigma vs 4pi(1 - k^2/(3 s^2))',
+        approx, float(sc5.crossSection(e_mev * 1e-3, (0, 0, 1))), 'rel', 2e-3)
+
     # ---------------- S2: blob at low energy ----------------
     n = 401
     g = make_grid(0.8, n)
