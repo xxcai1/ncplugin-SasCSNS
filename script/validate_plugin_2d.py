@@ -202,6 +202,46 @@ def main():
     row('S5 plugin between-nodes E=3.3meV shape chi2 p (120k)', 1e-3,
         chi2_angular(tab, (0, 0, 1), k_of_e(3.3), kf, nbins=24)[1], 'p', None)
 
+
+    # ---------------- S9: fuzz the sigma-grid error envelope ----------------
+    # 30 random smooth tables (sums of a few Gaussian blobs on a common
+    # floor) x 5 random kinematics each, plugin vs python quadrature of the
+    # same table. This measures the DISTRIBUTION of the sigma-grid
+    # interpolation error inside the design range (E in [0.5,20] meV,
+    # beta <= 60 mrad), i.e. it hardens the documented "1e-3..1e-2 for
+    # smooth tables" claim instead of relying on hand-picked cases.
+    rng = np.random.default_rng(77)
+    gsz = 201
+    g = make_grid(1.2, gsz)
+    X, Y = np.meshgrid(g, g)
+    ntab, errs = 30, []
+    for it in range(ntab):
+        vals = np.full_like(X, 0.5)
+        for _ in range(rng.integers(3, 7)):
+            cx, cy = rng.uniform(-0.6, 0.6, 2)
+            w = rng.uniform(0.1, 0.5)
+            amp = rng.uniform(0.2, 1.5)
+            vals += amp * np.exp(-((X - cx) ** 2 + (Y - cy) ** 2) / (2 * w * w))
+        tabf = Table2D(g, g, vals, f'fuzz{it}')
+        pf = write_ncmat(f'fuzz_{it:02d}', g, g, vals)
+        scf = NCrystal.createScatter(pf)
+        for _ in range(5):
+            e_mev = float(10 ** rng.uniform(np.log10(0.5), np.log10(20.0)))
+            beta = float(rng.choice([0.0, 0.01, 0.03, 0.06]))
+            psi = float(rng.uniform(0, 2 * math.pi))
+            ki = (math.sin(beta) * math.cos(psi), math.sin(beta) * math.sin(psi),
+                  math.cos(beta))
+            got = float(scf.crossSection(e_mev * 1e-3, ki))
+            ref = sigma_table(tabf, ki, k_of_e(e_mev))
+            errs.append(abs(got / ref - 1.0))
+    errs = np.array(errs)
+    row('S9 fuzz worst sigma error (150 random checks)', 0.0, float(errs.max()),
+        'near', 0.02)
+    row('S9 fuzz median sigma error', 0.0, float(np.median(errs)), 'near', 4e-3)
+    row('S9 fuzz fraction within 1%', 0.95, float((errs < 0.01).mean()), 'p', None)
+    print(f'   [S9 detail: rel.err quantiles 50/90/99/100% = '
+          f'{np.quantile(errs, [0.5, 0.9, 0.99, 1.0])}]', flush=True)
+
     print('\n' + '=' * 100)
     nfail = sum(1 for name, exp, got, kind, tol in rows
                 if (kind == 'rel' and not abs(got / exp - 1.0) < tol)
