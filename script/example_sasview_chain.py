@@ -11,9 +11,11 @@
 #      installed. If you have SasView, simply replace this step with its
 #      exported ASCII file.
 #   2. script/sasview2ncmat.py converts the exported I(Q) curve into an NCMAT
-#      file with an @CUSTOM_SASCSNS DirectLoad section. The --scale flag
-#      converts the SasView "barn per object" unit into the NCrystal "barn per
-#      atom" unit: I_ncmat = I_sasview * n_objects/n_atoms.
+#      file with an @CUSTOM_SASCSNS DirectLoad section. The converter ALWAYS
+#      applies the unit conversion from the SasView "barn per object" unit to
+#      the NCrystal "barn per atom" unit, I_ncmat = I_sasview * n_objects/
+#      n_atoms, computing the factor itself from the mandatory physical
+#      parameters (--phi, --radius or --volume, --material, --density).
 #   3. The resulting NCMAT file is loaded with NCrystal and its cross section
 #      is compared against the official builtin HARDSPHERESANS model for the
 #      same physical system (SiO2 spheres of 100 Angstrom radius, 40% volume
@@ -84,7 +86,7 @@ def run_chain(qgrid, tag):
     subprocess.run([sys.executable, os.path.join(HERE, 'sasview2ncmat.py'),
                     dat, '-o', ncmat, '--material', 'sio2',
                     '--density', str(DENSITY), '--radius', str(RADIUS),
-                    '--scale', f'{SCALE:.8g}'], check=True,
+                    '--phi', str(PHI)], check=True,
                    stdout=subprocess.DEVNULL)
     return ncmat
 
@@ -130,7 +132,7 @@ def main():
 
     print('[1/4] emulating SasView sphere-model exports (barn per object)...')
     ncmat_full = run_chain(q_full, 'full')
-    print(f'      I(Q->0) after --scale: {SCALE * V_p**2 * delta_rho**2 * BARN_PER_AA2:.6g}'
+    print(f'      I(Q->0) after unit conversion: {SCALE * V_p**2 * delta_rho**2 * BARN_PER_AA2:.6g}'
           ' barn/atom (n_objects/n_atoms conversion applied)')
     print(f'      -> {ncmat_full}')
 
