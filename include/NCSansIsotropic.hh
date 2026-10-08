@@ -6,7 +6,7 @@
                                           //namespaces and aliases)
 
 #include "NCLookUpTable.hh"
-#include "NCrystal/internal/NCPointwiseDist.hh"
+#include "NCrystal/internal/utils/NCPointwiseDist.hh"
 
 namespace NCPluginNamespace {
 

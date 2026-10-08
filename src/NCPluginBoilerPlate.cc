@@ -7,6 +7,9 @@
 #include "NCrystal/NCPluginBoilerplate.hh"
 
 #include "NCPluginFactory.hh"
+#include "NCTestPlugin.hh"
+
+#include "NCrystal/plugins/NCPluginMgmt.hh"
 
 void NCP::registerPlugin()
 {
@@ -14,4 +17,6 @@ void NCP::registerPlugin()
   //factories (or potentially other stuff, e.g. adding in-mem data files, etc.)
   //for the plugin.
   NC::FactImpl::registerFactory(std::make_unique<NCP::PluginFactory>());
+  NC::Plugins::registerPluginTestFunction( std::string("test_") + pluginName(),
+                                            customPluginTest );
 };

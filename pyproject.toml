@@ -1,0 +1,24 @@
+[project]
+name = "ncrystal-plugin-SasCSNS"
+version = "1.0.0"
+description = "SasCSNS - NCrystal plugin adding small angle scattering from spherical particles (CSNS)"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "cinema developers" }]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: Apache Software License",
+]
+dependencies = [ "ncrystal-core>=4.2.0,<4.3", "ncrystal-pypluginmgr>=0.0.5" ]
+
+[build-system]
+requires = [ "scikit-build-core>=0.10", "ncrystal-core>=4.2.0,<4.3" ]
+build-backend = "scikit_build_core.build"
+
+[tool.scikit-build]
+#build.verbose = true
+#cmake.build-type = "Debug"
+logging.level = "INFO"
+minimum-version = "build-system.requires"
+wheel.packages = []#handled by cmake
+wheel.py-api = "py3"

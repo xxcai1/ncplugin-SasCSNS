@@ -2,7 +2,7 @@
 #include  "NCSansHelper.hh"
 
 //Include various utilities from NCrystal's internal header files:
-#include "NCrystal/internal/NCString.hh"
+#include "NCrystal/internal/utils/NCString.hh"
 #include <vector>
 
 bool NCP::SansModelPicker::isApplicable( const NC::Info& info )

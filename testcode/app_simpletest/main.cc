@@ -1,6 +1,6 @@
 #include "NCSansIsotropic.hh"
 #include <iostream>
-#include "NCrystal/internal/NCMath.hh"//for NC::linspace
+#include "NCrystal/internal/utils/NCMath.hh"//for NC::linspace
 #include <vector>
 int main()
 {

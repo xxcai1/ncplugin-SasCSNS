@@ -1,0 +1,26 @@
+NCMAT v6
+#
+# Amorphous silica (SiO2) spheres of 10 nm radius, for demonstrating the
+# SasCSNS NCrystal plugin (small angle scattering model from CSNS).
+#
+# The @CUSTOM_SASCSNS section activates the plugin. Supported modes:
+#   HardSphere: "radius <value_in_Angstrom>" — analytic I(Q) of a solid sphere
+#   DirectLoad: "Q <list>" and "I <list>"   — load a measured I(Q) directly
+#
+# NOTE: this file requires the SasCSNS plugin to be installed and enabled.
+#
+
+@DENSITY
+  2.2 g_per_cm3
+@DYNINFO
+  element Si
+  fraction 0.3333333
+  type freegas
+@DYNINFO
+  element O
+  fraction 0.6666667
+  type freegas
+@CUSTOM_SASCSNS
+  HardSphere
+  #sphere radius in Angstrom:
+  radius 100

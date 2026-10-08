@@ -1,7 +1,6 @@
 
 #include "NCPluginFactory.hh"
 #include "NCSansIsotropic.hh"
-#include "NCrystal/internal/NCRandUtils.hh" // for randDirectionGivenScatterMu
 #include "NCSansModelPicker.hh"
 
 namespace NCPluginNamespace {
@@ -38,24 +37,23 @@ const char * NCP::PluginFactory::name() const noexcept
   return NCPLUGIN_NAME_CSTR "Factory";
 }
 
-NC::Priority NCP::PluginFactory::query( const NC::MatCfg& cfg ) const
+NC::Priority NCP::PluginFactory::query( const NC::FactImpl::ScatterRequest& req ) const
 {
-  if ( ! SansModelPicker::isApplicable(*globalCreateInfo(cfg)) )
+  //Respect the "sans" parameter, which allows users to disable SANS models:
+  if ( ! req.get_sans() )
+    return NC::Priority::Unable;
+  if ( ! SansModelPicker::isApplicable(req.info()) )
     return NC::Priority::Unable;
   return NC::Priority{999};
 }
 
-NC::ProcImpl::ProcPtr NCP::PluginFactory::produce( const NC::MatCfg& cfg ) const
+NC::ProcImpl::ProcPtr NCP::PluginFactory::produce( const NC::FactImpl::ScatterRequest& req ) const
 {
-  // cfg.get_packfact()
-  auto sc_ourmodel = NC::makeSO<PluginScatter>(SansModelPicker::createFromInfo(globalCreateInfo(cfg) ));
+  auto sc_ourmodel = NC::makeSO<PluginScatter>(SansModelPicker::createFromInfo(req.infoPtr()));
   return sc_ourmodel;
 
-  //fixme: to be enabled again
-  // auto cfg2 = cfg.clone();
-  // auto sc_std = globalCreateScatter(cfg2);
-  //[Comment from TK: No need to clone cfg as cfg2 if you are not going to change any parameters.]
-  //
-  // // Combine and return:
+  //To add our SANS contribution on top of the standard NCrystal models, the
+  //following could be used instead:
+  // auto sc_std = globalCreateScatter( req );
   // return combineProcs( sc_std, sc_ourmodel );
 }
