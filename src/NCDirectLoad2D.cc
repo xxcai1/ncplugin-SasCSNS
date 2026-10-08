@@ -5,6 +5,7 @@
 #include <thread>
 
 //Include various utilities from NCrystal's internal header files:
+#include "NCrystal/internal/utils/NCMsg.hh"
 #include "NCrystal/internal/utils/NCString.hh"
 
 #include <algorithm>
@@ -224,6 +225,21 @@ namespace NCPluginNamespace {
   {
     m_i_max = *std::max_element( m_vals.begin(), m_vals.end() );
 
+    //The lowest model energy must have its integration disc inside the
+    //table; otherwise even 0.1 meV neutrons probe the truncation regime
+    //(still consistent, but real forward intensity is amputated):
+    {
+      const double disc2 = 2.0 * kOfEkinE( 1.0e-4 );//2*k(0.1 meV), in 1/Aa
+      const double halfw = std::min( ( m_qx.back() - m_qx.front() ) * 0.5,
+                                     ( m_qy.back() - m_qy.front() ) * 0.5 );
+      if ( halfw < disc2 )
+        NCPLUGIN_WARN( "DirectLoad2D table half-width " << halfw
+                       << " 1/A does not cover the disc 2k = " << disc2
+                       << " 1/A needed at the lowest energy (0.1 meV); "
+                       "sigma is truncated consistently, but SANS intensity "
+                       "beyond the table edge is missing (extend the table!)" );
+    }
+
     //Energy grid: 24 log-spaced points in [0.1, 100] meV (spec 7.3). The
     //neighbouring-node spacing keeps sigma- and sampling-grid errors at the
     //per-mille level for smooth tables.
@@ -414,9 +430,26 @@ namespace NCPluginNamespace {
 
   double DirectLoad2D::crossSection( double ekin, const NC::NeutronDirection& dir ) const
   {
+    if ( ( ekin < m_ekin.front() || ekin > m_ekin.back() ) && !m_warned_ewindow ) {
+      m_warned_ewindow = true;
+      NCPLUGIN_WARN( "DirectLoad2D queried at E = " << ekin * 1000.0
+                     << " meV, outside the calibrated energy window ["
+                     << m_ekin.front() * 1000.0 << ',' << m_ekin.back() * 1000.0
+                     << "] meV; boundary-node values are served (sigma clamps "
+                     "towards its E->0 / high-E limits)" );
+    }
     const double beta = std::acos( std::clamp( dir[2], -1.0, 1.0 ) );
     const double psi_beam = std::atan2( dir[1], dir[0] );
-    return sigmaLookup( kOfEkinE( ekin ) * std::sin( beta ), psi_beam, ekin );
+    const double s = kOfEkinE( ekin ) * std::sin( beta );
+    if ( s > kSMax && !m_warned_sclamp ) {
+      m_warned_sclamp = true;
+      NCPLUGIN_WARN( "DirectLoad2D queried at beam tilt " << beta
+                     << " rad with s = k*sin(beta) = " << s
+                     << " 1/A beyond the sigma grid s_max = " << kSMax
+                     << " (design range: 60 mrad at E <= 100 meV); clamping "
+                     "s degrades the tilted-beam sigma gracefully" );
+    }
+    return sigmaLookup( s, psi_beam, ekin );
   }
 
   DirectLoad2D::Outcome DirectLoad2D::sample( NC::RNG& rng, double ekin,

@@ -64,6 +64,11 @@ namespace NCPluginNamespace {
     void init();//build energy grid, dilated image, CDFs, envelopes, sigma grid
     void buildEnergyData( unsigned ie, double k );//worker: one energy node
 
+    //One-shot runtime warnings (mutable: warned from const methods; plain
+    //bools are fine -- NCrystal process objects are single-threaded):
+    mutable bool m_warned_sclamp = false;
+    mutable bool m_warned_ewindow = false;
+
     void buildAngularCDF( AngularCDF& cdf, double k, bool dilated ) const;
 
     //Grid data (I values stored row-major, qy outer loop):
