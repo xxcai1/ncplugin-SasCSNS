@@ -1,5 +1,6 @@
 
 #include "NCPluginFactory.hh"
+#include "NCDirectLoad2D.hh"
 #include "NCSansIsotropic.hh"
 #include "NCSansModelPicker.hh"
 
@@ -57,6 +58,12 @@ NC::Priority NCP::PluginFactory::query( const NC::FactImpl::ScatterRequest& req 
 
 NC::ProcImpl::ProcPtr NCP::PluginFactory::produce( const NC::FactImpl::ScatterRequest& req ) const
 {
+  //Tabulated anisotropic 2D SANS (DirectLoad2D): the material becomes
+  //anisotropic and transport must ask for direction-dependent cross sections:
+  if ( DirectLoad2D::isDirectLoad2D(req.info()) ) {
+    return NC::makeSO<DirectLoad2DScatter>( DirectLoad2D::createFromInfo(req.info()) );
+  }
+
   auto sc_ourmodel = NC::makeSO<PluginScatter>(SansModelPicker::createFromInfo(req.infoPtr()));
   return sc_ourmodel;
 
