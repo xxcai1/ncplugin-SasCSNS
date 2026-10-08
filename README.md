@@ -42,6 +42,7 @@ python script/example_sasview_chain_2d.py # rung 6 (2D): full SasView chain + fi
 python script/example_transmission_2d.py  # rung 8: transport-integrated attenuation
 ncrystal-pluginmanager --test SasCSNS     # rung 5: regression anchors
 python script/fig_chain_2d.py             # render doc/fig_chain_2d.pdf
+python script/fig_conventions.py          # render doc/fig_conventions.pdf
 ```
 
 Rung 7 documents the one known convention effect: the 2D model's
