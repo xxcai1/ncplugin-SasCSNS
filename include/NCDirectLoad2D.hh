@@ -54,10 +54,22 @@ namespace NCPluginNamespace {
     double evalI( double qx, double qy ) const;
     double evalIdil( double qx, double qy ) const;
 
-    //Per-energy cumulative sampling table over outcome angles (theta,psi):
+    //Per-energy cumulative sampling table over outcome angles (theta,psi).
+    //Two bin layouts (field layout):
+    //  theta-uniform (dilated proposals): bin ith covers
+    //    theta in [ ith*pi/nth, (ith+1)*pi/nth ], sampled uniformly in theta.
+    //  q-uniform (plain CDFs, adaptive resolution): bin ith covers
+    //    Q_perp = k*sin(theta) in [ ith*k/nth, (ith+1)*k/nth ], i.e.
+    //    theta = asin(Q_perp/k) -- resolution follows the table pitch,
+    //    concentrating bins in the forward cone where SANS intensity (and
+    //    anisotropy) lives, so narrow patterns are not aliased by fixed
+    //    16 mrad bins (the "angular-CDF staircase", doc rung 7); sampled
+    //    uniformly in Q_perp within a bin.
     struct AngularCDF {
       double k = 0.0;              // wavenumber [1/Aa]
       double total = 0.0;          // integral of I sin(th) dth dps over sphere
+      unsigned nth = 0;            // theta-bin count of this CDF
+      bool quniform = false;       // true: Q_perp-uniform bins (see above)
       std::vector<float> cum;      // normalised cumulative cell masses
     };
 
@@ -81,7 +93,13 @@ namespace NCPluginNamespace {
     //Energy grid (ascending, eV) + per-energy CDFs (plain and dilated):
     std::vector<double> m_ekin;
     std::vector<AngularCDF> m_cdfs, m_cdfs_dil;
-    static constexpr unsigned kNth = 192, kNpsi = 384, kNEnergy = 48;
+    //kNth: theta bins of the dilated proposals and the floor resolution of
+    //the plain CDFs. Plain CDFs adapt their theta-bin count to the table
+    //pitch: n = 2*k/h (h = finest grid pitch), clamped to
+    //[kNth,kNthMaxPlain]; the cap bounds the memory of the 48 plain CDFs
+    //(kNthMaxPlain*kNpsi*4B*kNEnergy ~ 38 MB worst case).
+    static constexpr unsigned kNth = 192, kNthMaxPlain = 512;
+    static constexpr unsigned kNpsi = 384, kNEnergy = 48;
 
     //Sigma grid over (s,psi_beam,E) with s = k*sin(beta) the in-plane beam
     //shift, multi-linear in all three (s beyond the grid clamps; low energies

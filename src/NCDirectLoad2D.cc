@@ -314,20 +314,51 @@ namespace NCPluginNamespace {
   void DirectLoad2D::buildAngularCDF( AngularCDF& cdf, double k, bool dilated ) const
   {
     cdf.k = k;
-    cdf.cum.assign( kNth * kNpsi, 0.0f );
-    const double dth = NC::kPi / kNth, dps = 2.0 * NC::kPi / kNpsi;
+    cdf.quniform = ! dilated;
+    //Plain CDFs get Q_perp-uniform theta bins at a pitch-matched count
+    //(resolution follows the table; see AngularCDF comment in the header),
+    //dilated proposals keep the cheaper fixed theta-uniform grid:
+    const double hmin = std::min( 1.0 / m_invdx, 1.0 / m_invdy );
+    const unsigned nth = dilated
+      ? kNth
+      : std::clamp( static_cast<unsigned>( std::lround( 2.0 * k / hmin ) ),
+                    kNth, kNthMaxPlain );
+    cdf.nth = nth;
+    cdf.cum.assign( static_cast<std::size_t>( nth ) * kNpsi, 0.0f );
+    const double dps = 2.0 * NC::kPi / kNpsi;
     double tot = 0.0;
-    for ( unsigned ith = 0; ith < kNth; ++ith ) {
-      const double th = ( ith + 0.5 ) * dth;
-      const double sth = std::sin( th );
-      const double w = sth * dth * dps;
+    for ( unsigned ith = 0; ith < nth; ++ith ) {
+      //Cell in Q_perp = k*sin(theta): Q in [ith*k/nth,(ith+1)*k/nth],
+      //covering BOTH elastic branches theta_i..theta_{i+1} and their
+      //mirrors pi-theta_{i+1}..pi-theta_i (that union is precisely the
+      //mirror convention, doc sec:backward, and the two zones have equal
+      //area -- hence the factor 2 below). The exact spherical-zone weight
+      //(constant-I cell mass) is (cos(th_i)-cos(th_{i+1}))*dpsi with
+      //theta_i = asin(ith/nth); the intensity is evaluated at the cell
+      //midpoint Q_perp, matching the uniform-Q within-bin sampling in
+      //sample():
+      double cth0, cth1, sth_mid;
+      if ( cdf.quniform ) {
+        const double f0 = ith / static_cast<double>( nth );
+        const double f1 = ( ith + 1 ) / static_cast<double>( nth );
+        cth0 = std::sqrt( std::max( 0.0, 1.0 - f0 * f0 ) );
+        cth1 = std::sqrt( std::max( 0.0, 1.0 - f1 * f1 ) );
+        sth_mid = ( f0 + f1 ) * 0.5;
+      } else {
+        const double th = ( ith + 0.5 ) * NC::kPi / nth;
+        cth0 = std::cos( ith * NC::kPi / nth );
+        cth1 = std::cos( ( ith + 1 ) * NC::kPi / nth );
+        sth_mid = std::sin( th );
+      }
+      const double w = ( cdf.quniform ? 2.0 : 1.0 ) * ( cth0 - cth1 ) * dps;
       for ( unsigned ipsi = 0; ipsi < kNpsi; ++ipsi ) {
         const double psi = ( ipsi + 0.5 ) * dps;
-        const double qx = k * sth * std::cos( psi );
-        const double qy = k * sth * std::sin( psi );
+        const double qx = k * sth_mid * std::cos( psi );
+        const double qy = k * sth_mid * std::sin( psi );
         const double v = dilated ? evalIdil( qx, qy ) : evalI( qx, qy );
         tot += v * w;
-        cdf.cum[ ith * kNpsi + ipsi ] = static_cast<float>( tot );
+        cdf.cum[ static_cast<std::size_t>( ith ) * kNpsi + ipsi ]
+          = static_cast<float>( tot );
       }
     }
     cdf.total = tot;
@@ -474,14 +505,26 @@ namespace NCPluginNamespace {
       const double u = rng.generate();
       auto it = std::upper_bound( cdf.cum.begin(), cdf.cum.end(), u );
       std::size_t idx = ( it == cdf.cum.end() ? cdf.cum.size() - 1 : it - cdf.cum.begin() );
-      const double dth = NC::kPi / kNth, dps = 2.0 * NC::kPi / kNpsi;
+      const double dps = 2.0 * NC::kPi / kNpsi;
       const std::size_t ith = idx / kNpsi, ipsi = idx % kNpsi;
-      const double th = ( ith + rng.generate() ) * dth;
       const double psi = ( ipsi + rng.generate() ) * dps;
-      const double st = std::sin( th );
+      double st, ct;
+      if ( cdf.quniform ) {
+        //uniform Q_perp within the bin (matches the cell-mass definition);
+        //the cell covers both elastic branches, picked with equal probability:
+        const double q = cdf.k * ( ith + rng.generate() ) / cdf.nth;
+        st = q / cdf.k;
+        ct = std::sqrt( std::max( 0.0, 1.0 - st * st ) );
+        if ( rng.generate() < 0.5 )
+          ct = -ct;
+      } else {
+        const double th = ( ith + rng.generate() ) * NC::kPi / cdf.nth;
+        st = std::sin( th );
+        ct = std::cos( th );
+      }
       kfx = st * std::cos( psi );
       kfy = st * std::sin( psi );
-      kfz = std::cos( th );
+      kfz = ct;
     };
 
     if ( beta <= kOnAxisTilt ) {

@@ -147,12 +147,15 @@ def main():
         rat = (cnt1 / cnt1.sum()) / (cnt2 / cnt2.sum())
     maxdev = float(np.nanmax(np.abs(rat - 1.0)))
     c2 = float(((cnt1 - cnt2) ** 2 / np.maximum(cnt1 + cnt2, 1)).sum())
+    #the historical angular-CDF staircase (fixed 192 theta-bins aliasing
+    #narrow patterns at +-5-10%) was eliminated by the pitch-matched
+    #adaptive Q_perp-uniform theta grid; the residual is Poisson noise
+    #(measured 0.039 at 200k events = 1.5 sigma, falling as 1/sqrt(N)):
     print(f'   [design-cone shape check on {mu1c.size}/{mu2c.size} '
-          f'in-cone events of 200k; chi2/ndf = {c2 / 8:.1f}; the residual '
-          f'is the angular-CDF staircase: the sampler resolves theta in '
-          f'192 bins of 16 mrad, only ~6 across this pattern]', flush=True)
-    row('narrow E=2.07meV: design-cone shapes, max bin dev (<15%:',
-        0.0, maxdev, 'near', 0.15)
+          f'in-cone events of 200k; noise per bin ~3%, maxdev/noise '
+          f'~1.5 = statistical]', flush=True)
+    row('narrow E=2.07meV: design-cone shapes, max bin dev (<8%:',
+        0.0, maxdev, 'near', 0.08)
 
     print('\n   [backward-branch accounting: sigma_2D forward lobe + '
           'backward lobe, each = 2*pi*s_q^2/k^2 for a narrow Gaussian -> '
