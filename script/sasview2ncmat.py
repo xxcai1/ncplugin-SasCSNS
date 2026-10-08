@@ -48,12 +48,20 @@ def read_sasview_iq(filename):
     if len(points) < 2:
         sys.exit(f'ERROR: found fewer than 2 (Q,I) points in {filename}')
     # Sort ascending in Q, drop NaN/negative-I points and duplicated Q values:
+    bad = [(q, i) for q, i in points if not (q > 0.0 and i > 0.0)]
+    if bad:
+        print(f'WARNING: dropped {len(bad)} of {len(points)} data points with '
+              f'Q<=0, I<=0 or non-finite values (first: Q={bad[0][0]!r} I={bad[0][1]!r})')
     points = sorted((q, i) for q, i in points if q > 0.0 and i > 0.0)
     deduped = []
+    n_dup = 0
     for q, i in points:
         if deduped and abs(q - deduped[-1][0]) < 1.0e-12:
+            n_dup += 1
             continue
         deduped.append((q, i))
+    if n_dup:
+        print(f'WARNING: dropped {n_dup} duplicated Q values')
     return deduped
 
 
@@ -143,6 +151,11 @@ def main():
                              '(V_p = 4/3*pi*R^3)')
     vgroup.add_argument('--volume', type=float,
                         help='particle volume in Angstrom^3, for non-spherical particles')
+    ap.add_argument('--emax', type=float, default=None,
+                    help='highest neutron energy [meV] the file must cover. '
+                         'If given and Qmax < 2k(Emax), abort with an error '
+                         '(a truncated Q table silently biases cross '
+                         'sections; see example_sasview_chain.py step 4)')
     ap.add_argument('--solvent', default='',
                     help='solvent material name, stored as a comment for '
                          'reference (DirectLoad I(Q) already includes solvent '
@@ -164,6 +177,36 @@ def main():
     scale = (args.phi / v_p) / n_d  # barn/object -> barn/atom
 
     points = read_sasview_iq(args.sasview_file)
+
+    # --- data-file validation (a truncated or coarse table biases results
+    #     silently - always report what the file can and cannot describe) ---
+    qmax = points[-1][0]
+    kmax = 0.5 * qmax                      # largest k with 2k <= Qmax
+    e_cover = 2.07214 * kmax**2            # [meV] highest fully covered energy
+    print(f'File validation: Qmax = {qmax:.6g} 1/Aa -> fully covers neutron '
+          f'energies up to E = {e_cover:.4g} meV (Q = 2k rule)')
+    if args.emax is not None and qmax < 2.0 * math.sqrt(args.emax / 2.07214):
+        sys.exit(f'ERROR: Qmax = {qmax:.6g} 1/Aa does not cover --emax '
+                 f'{args.emax:g} meV (needs Q >= {2.0 * math.sqrt(args.emax / 2.07214):.6g} '
+                 f'1/Aa). Extend the table or lower --emax.')
+    if len(points) > 1:
+        dq = min(b[0] - a[0] for a, b in zip(points, points[1:]))
+        if args.radius:
+            dq_needed = math.pi / (10.0 * args.radius)  # >=10 pts per oscillation
+            if dq < dq_needed:
+                print(f'File validation: min spacing {dq:.3g} 1/Aa resolves '
+                      f'form-factor oscillations of R = {args.radius:g} Aa '
+                      f'(need <= {dq_needed:.3g}) OK')
+            else:
+                print(f'WARNING: min Q spacing {dq:.3g} 1/Aa is too coarse to '
+                      f'resolve form-factor oscillations of R = {args.radius:g} Aa '
+                      f'(want >= 10 points per pi/R period, i.e. spacing <= '
+                      f'{dq_needed:.3g} 1/Aa)')
+        if points[0][0] > 0.05 * qmax:
+            print(f'WARNING: table starts at Q = {points[0][0]:.3g} 1/Aa; the '
+                  f'forward region below it is not tabulated (SANS intensity '
+                  f'peaks at Q = 0)')
+
     write_ncmat(args.output, points, args.material, args.density,
                 args.radius, args.solvent, scale)
     print(f'Wrote {args.output} with {len(points)} (Q,I) points from '
