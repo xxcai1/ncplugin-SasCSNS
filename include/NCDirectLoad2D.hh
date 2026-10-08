@@ -62,6 +62,7 @@ namespace NCPluginNamespace {
     };
 
     void init();//build energy grid, dilated image, CDFs, envelopes, sigma grid
+    void buildEnergyData( unsigned ie, double k );//worker: one energy node
 
     void buildAngularCDF( AngularCDF& cdf, double k, bool dilated ) const;
 

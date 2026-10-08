@@ -1,5 +1,9 @@
 #include "NCDirectLoad2D.hh"
 
+#include <atomic>
+#include <mutex>
+#include <thread>
+
 //Include various utilities from NCrystal's internal header files:
 #include "NCrystal/internal/utils/NCString.hh"
 
@@ -146,6 +150,76 @@ namespace NCPluginNamespace {
     return m;
   }
 
+  void DirectLoad2D::buildEnergyData( unsigned ie, double k )
+  {
+    //Per-energy CDFs, plain and dilated (spec 7.3):
+    buildAngularCDF( m_cdfs[ie], k, false );
+    buildAngularCDF( m_cdfs_dil[ie], k, true );
+
+    //Tier-1 tilt envelope: max ratio I(shifted beam)/I(z-hat beam) over the
+    //sampling grid, a few tilt azimuths, times a small safety margin:
+    {
+      const unsigned nth = 96, npsi = 192;
+      const double dth = NC::kPi / nth, dps = 2.0 * NC::kPi / npsi;
+      const double b1 = kOnAxisTilt;
+      double m = 1.0;
+      for ( unsigned ia = 0; ia < 8; ++ia ) {
+        const double psb = ia * NC::kPi / 4.0;
+        const double ax = std::sin( b1 ) * std::cos( psb );
+        const double ay = std::sin( b1 ) * std::sin( psb );
+        for ( unsigned ith = 0; ith < nth; ++ith ) {
+          const double th = ( ith + 0.5 ) * dth;
+          for ( unsigned ipsi = 0; ipsi < npsi; ++ipsi ) {
+            const double psi = ( ipsi + 0.5 ) * dps;
+            const double kfx = std::sin( th ) * std::cos( psi );
+            const double kfy = std::sin( th ) * std::sin( psi );
+            const double iz = evalI( k * kfx, k * kfy );
+            if ( iz <= 0.0 )
+              continue;
+            const double it = evalI( k * ( kfx - ax ), k * ( kfy - ay ) );
+            const double r = it / iz;
+            if ( r > m )
+              m = r;
+          }
+        }
+      }
+      m_tilt_envelope[ie] = 1.01 * m;
+    }
+
+    //Sigma grid slice at this energy: (s = k*sin(beta) in [0,kSMax]) x
+    //psi_beam in [0,2pi], midpoint quadrature of the smooth alpha-form
+    //(spec eq. 11). Multi-linear at run time in (s,psi,lnE); s beyond the
+    //grid clamps, which within the design range never happens
+    //(s_max = k_top*beta_max covers any beam tilt at E <= E_top).
+    {
+      constexpr unsigned nalpha = 64, nphi = 64;
+      const double dalpha = NC::kPi / nalpha, dphi = 2.0 * NC::kPi / nphi;
+      const double ds = kSMax / ( kNS - 1 );
+      const double dpsi = 2.0 * NC::kPi / ( kNPsi - 1 );
+      double alpha_weight[ nalpha ];
+      for ( unsigned ia = 0; ia < nalpha; ++ia )
+        alpha_weight[ia] = std::sin( ( ia + 0.5 ) * dalpha ) * dalpha;
+      for ( unsigned is_ = 0; is_ < kNS; ++is_ ) {
+        const double shift = is_ * ds;
+        const double cx0 = -shift;
+        for ( unsigned ip = 0; ip < kNPsi; ++ip ) {
+          const double psb = ip * dpsi;
+          const double cx = cx0 * std::cos( psb ), cy = cx0 * std::sin( psb );
+          double acc = 0.0;
+          for ( unsigned ial = 0; ial < nalpha; ++ial ) {
+            const double al = ( ial + 0.5 ) * dalpha;
+            const double ra = k * std::sin( al ), w = alpha_weight[ial];
+            for ( unsigned iph = 0; iph < nphi; ++iph ) {
+              const double ph = ( iph + 0.5 ) * dphi;
+              acc += evalI( cx + ra * std::cos( ph ), cy + ra * std::sin( ph ) ) * w;
+            }
+          }
+          m_sigma[ ( is_ * kNPsi + ip ) * kNEnergy + ie ] = acc * dphi;
+        }
+      }
+    }
+  }
+
   void DirectLoad2D::init()
   {
     m_i_max = *std::max_element( m_vals.begin(), m_vals.end() );
@@ -171,87 +245,44 @@ namespace NCPluginNamespace {
       maxFilterAxis( tmp, m_vals_dil, m_nx, m_ny, std::min( wy, m_ny - 1 ) );
     }
 
-    //Per-energy CDFs, plain and dilated (spec 7.3).
+    //Pre-size everything; the per-energy work below is independent per
+    //energy node and runs on worker threads (spec 7.3).
     m_cdfs.resize( kNEnergy );
     m_cdfs_dil.resize( kNEnergy );
-    for ( unsigned i = 0; i < kNEnergy; ++i ) {
-      const double k = kOfEkinE( m_ekin[i] );
-      buildAngularCDF( m_cdfs[i], k, false );
-      buildAngularCDF( m_cdfs_dil[i], k, true );
-    }
-
-    //Tier-1 tilt envelopes: max ratio I(shifted beam)/I(z-hat beam) over the
-    //sampling grid, a few tilt azimuths, times a small safety margin.
     m_tilt_envelope.assign( kNEnergy, 1.0 );
-    {
-      const unsigned nth = 96, npsi = 192;
-      const double dth = NC::kPi / nth, dps = 2.0 * NC::kPi / npsi;
-      const double b1 = kOnAxisTilt;
-      for ( unsigned ie = 0; ie < kNEnergy; ++ie ) {
-        const double k = kOfEkinE( m_ekin[ie] );
-        double m = 1.0;
-        for ( unsigned ia = 0; ia < 8; ++ia ) {
-          const double psb = ia * NC::kPi / 4.0;
-          const double ax = std::sin( b1 ) * std::cos( psb );
-          const double ay = std::sin( b1 ) * std::sin( psb );
-          for ( unsigned ith = 0; ith < nth; ++ith ) {
-            const double th = ( ith + 0.5 ) * dth;
-            for ( unsigned ipsi = 0; ipsi < npsi; ++ipsi ) {
-              const double psi = ( ipsi + 0.5 ) * dps;
-              const double kfx = std::sin( th ) * std::cos( psi );
-              const double kfy = std::sin( th ) * std::sin( psi );
-              const double iz = evalI( k * kfx, k * kfy );
-              if ( iz <= 0.0 )
-                continue;
-              const double it = evalI( k * ( kfx - ax ), k * ( kfy - ay ) );
-              const double r = it / iz;
-              if ( r > m )
-                m = r;
-            }
-          }
-        }
-        m_tilt_envelope[ie] = 1.01 * m;
-      }
-    }
-
-    //Sigma grid: 41x41 directions over (s = k*sin(beta) in [0,kSMax],
-    //psi_beam in [0,2pi]) x 24 energies, midpoint quadrature of the smooth
-    //alpha-form (spec eq. 11). Multi-linear at run time in (s,psi,lnE);
-    //s beyond the grid clamps, which for k <= kSMax never happens (any beam
-    //tilt has s <= k) - only very fast neutrons on far-off-axis beams clamp.
     m_sigma.assign( kNS * kNPsi * kNEnergy, 0.0 );
     {
-      constexpr unsigned nalpha = 64, nphi = 64;
-      const double dalpha = NC::kPi / nalpha, dphi = 2.0 * NC::kPi / nphi;
-      const double ds = kSMax / ( kNS - 1 );
-      const double dpsi = 2.0 * NC::kPi / ( kNPsi - 1 );
-      std::vector<double> alpha_weight( nalpha );
-      for ( unsigned ia = 0; ia < nalpha; ++ia )
-        alpha_weight[ia] = std::sin( ( ia + 0.5 ) * dalpha ) * dalpha;
-      for ( unsigned is_ = 0; is_ < kNS; ++is_ ) {
-        const double shift = is_ * ds;
-        for ( unsigned ip = 0; ip < kNPsi; ++ip ) {
-          const double psb = ip * dpsi;
-          for ( unsigned ie = 0; ie < kNEnergy; ++ie ) {
-            const double k = kOfEkinE( m_ekin[ie] );
-            //beam direction for this grid point: in-plane component of
-            //magnitude s along psi_beam, z-component from unit norm:
-            const double sn = shift;              // = k*sin(beta)
-            const double axx = std::cos( psb ), ayy = std::sin( psb );
-            const double cx = -sn * axx, cy = -sn * ayy;
-            double acc = 0.0;
-            for ( unsigned ial = 0; ial < nalpha; ++ial ) {
-              const double al = ( ial + 0.5 ) * dalpha;
-              const double ra = k * std::sin( al ), w = alpha_weight[ial];
-              for ( unsigned iph = 0; iph < nphi; ++iph ) {
-                const double ph = ( iph + 0.5 ) * dphi;
-                acc += evalI( cx + ra * std::cos( ph ), cy + ra * std::sin( ph ) ) * w;
-              }
-            }
-            m_sigma[ ( is_ * kNPsi + ip ) * kNEnergy + ie ] = acc * dphi;
+      std::vector<double> kk( kNEnergy );
+      for ( unsigned i = 0; i < kNEnergy; ++i )
+        kk[i] = kOfEkinE( m_ekin[i] );
+      const unsigned nthr
+        = std::min<unsigned>( kNEnergy, std::thread::hardware_concurrency() );
+      std::atomic<unsigned> next{ 0 };
+      std::exception_ptr eptr;
+      std::mutex eptr_mutex;
+      auto worker = [&]() {
+        for (;;) {
+          const unsigned ie = next.fetch_add( 1 );
+          if ( ie >= kNEnergy || eptr )
+            return;
+          try {
+            buildEnergyData( ie, kk[ie] );
+          } catch ( ... ) {
+            std::lock_guard<std::mutex> guard( eptr_mutex );
+            if ( !eptr )
+              eptr = std::current_exception();
+            return;
           }
         }
-      }
+      };
+      std::vector<std::thread> threads;
+      threads.reserve( nthr );
+      for ( unsigned i = 0; i < nthr; ++i )
+        threads.emplace_back( worker );
+      for ( auto& t : threads )
+        t.join();
+      if ( eptr )
+        std::rethrow_exception( eptr );
     }
 
     //Overwrite the s = 0 row with the CDF totals: the on-axis sigma is then
