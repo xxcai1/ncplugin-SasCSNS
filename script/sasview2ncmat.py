@@ -207,10 +207,14 @@ def write_ncmat_2d(out, qx, qy, vals, material, density, solvent, scale):
                   f'  element {element}',
                   f'  fraction {frac}',
                   '  type freegas']
+    #12 significant digits on the axes: the DirectLoad2D parser enforces
+    #uniform spacing with a 1e-6*|d0| tolerance, which %.8g can violate on
+    #finer grids (rounding shifts consecutive pixel centres by ~1e-8 -- right
+    #at the tolerance for 400-point axes):
     lines += ['@CUSTOM_SASCSNS',
               '  DirectLoad2D',
-              '  Qx ' + ' '.join(f'{q:.8g}' for q in qx),
-              '  Qy ' + ' '.join(f'{q:.8g}' for q in qy)]
+              '  Qx ' + ' '.join(f'{q:.12g}' for q in qx),
+              '  Qy ' + ' '.join(f'{q:.12g}' for q in qy)]
     # I values, row major with qy as the outer axis; start on the I line:
     flat = ['%.7g' % (v * scale) for row in vals for v in row]
     per_line = 10
@@ -277,10 +281,12 @@ def write_ncmat(out, points, material, density, radius, solvent, scale):
                   f'  element {element}',
                   f'  fraction {frac}',
                   '  type freegas']
+    #%.12g on Q: the DirectLoad parser's 1e-6*|d0| uniformity tolerance
+    #makes %.6g unsafe for fine grids (see write_ncmat_2d):
     lines += ['@CUSTOM_SASCSNS',
               '  DirectLoad',
-              '  Q ' + ' '.join(f'{q:.6g}' for q, _ in points),
-              '  I ' + ' '.join(f'{i * scale:.6g}' for _, i in points)]
+              '  Q ' + ' '.join(f'{q:.12g}' for q, _ in points),
+              '  I ' + ' '.join(f'{i * scale:.8g}' for _, i in points)]
     if solvent:
         lines.append(f'  solvent {solvent}')
     lines.append('')
@@ -421,6 +427,12 @@ def main_2d(args):
     if min(len(qx), len(qy)) < 8:
         print(f'WARNING: only {len(qx)}x{len(qy)} pixels; anisotropic '
               f'structure is poorly resolved on such a coarse grid')
+    if qx[0] > 0.0 or qy[0] > 0.0:
+        print(f'WARNING: table starts at Qx={qx[0]:.6g}, Qy={qy[0]:.6g} '
+              f'-- it does not contain Q=0, so the forward SANS intensity '
+              f'(dominant at low neutron energies) is amputated; the model '
+              f'interpolates from the first pixel inward. Export grids '
+              f'should start at Q=0.')
     write_ncmat_2d(args.output, qx, qy, vals, args.material, args.density,
                    args.solvent, scale)
     print(f'Wrote {args.output} with {len(qx) * len(qy)} I(Qx,Qy) values '
