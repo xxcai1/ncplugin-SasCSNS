@@ -86,6 +86,44 @@ with open(raw, 'w') as fh:
             fh.write(f'{qx[ix]:.8g} {qy[iy]:.8g} {I_object[iy, ix]:.8g}\n')
 print(f'step 1: wrote emulated SasView 2D export ({NQ}x{NQ} pixels) -> {raw}')
 
+#--- 1b. emulated kernel vs the real sasmodels cylinder (optional) -------------
+#The demo emulates SasView's 2D evaluation analytically. If sasmodels is
+#installed, verify the emulation against the real kernel at 200 random
+#non-zero pixels of the same grid: the SHAPES must agree to machine
+#precision, while the ratio must be ONE constant -- precisely the unit
+#convention (sasmodels 1/cm-with-scale vs barn/object) that
+#sasview2ncmat.py absorbs.
+try:
+    from sasmodels.core import load_model
+    from sasmodels.data import Data2D
+    from sasmodels.direct_model import DirectModel
+except ImportError:
+    print('step 1b: sasmodels not installed - skipping kernel cross-check')
+else:
+    rngk = np.random.default_rng(5)
+    iyk, ixk = np.unravel_index(rngk.choice(NQ * NQ, 200, replace=False),
+                                (NQ, NQ))
+    pxk, pyk = qx[ixk], qy[iyk]
+    nz = (np.abs(pxk) > 1e-9) | (np.abs(pyk) > 1e-9)  # sasmodels masks q = 0
+    pxk, pyk = pxk[nz], pyk[nz]
+    prefk = I_object[iyk[nz], ixk[nz]]
+    datak = Data2D(x=pxk, y=pyk, z=np.zeros(pxk.size))
+    datak.err_data = np.ones(pxk.size)
+    smk = np.atleast_1d(DirectModel(datak, load_model('cylinder'))(
+        radius=RADIUS, length=LENGTH, sld=3.475, sld_solvent=0.0,
+        theta=30.0, phi=0.0, background=0.0, scale=1.0))
+    ratio = smk / prefk
+    shape_dev = float(np.max(np.abs(smk / smk.max() - prefk / prefk.max())))
+    const_dev = float(np.std(ratio) / np.mean(ratio))
+    okk = shape_dev < 1e-6 and const_dev < 1e-6
+    if not okk:
+        failures += 1
+    print(f'step 1b: sasmodels cylinder kernel vs emulation over {pxk.size} '
+          f'pixels: shape max dev {shape_dev:.2e}, ratio const to '
+          f'{const_dev:.2e} (factor {np.mean(ratio):.6g}, the unit '
+          f'convention the converter absorbs) '
+          f'[{"PASS" if okk else "FAIL"}]')
+
 #--- 2. convert ----------------------------------------------------------------
 ncmat = os.path.join(WORK, 'cylinder2d.ncmat')
 scale_expected = (PHI / V_P) / n_atoms
