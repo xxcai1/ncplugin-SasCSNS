@@ -55,7 +55,7 @@ MATERIAL_PRESETS = {
 }
 
 
-def write_ncmat(out, points, material, density, radius, solvent):
+def write_ncmat(out, points, material, density, radius, solvent, scale=1.0):
     try:
         composition = MATERIAL_PRESETS[material.lower()]
     except KeyError:
@@ -80,7 +80,7 @@ def write_ncmat(out, points, material, density, radius, solvent):
     lines += ['@CUSTOM_SASCSNS',
               '  DirectLoad',
               '  Q ' + ' '.join(f'{q:.6g}' for q, _ in points),
-              '  I ' + ' '.join(f'{i:.6g}' for _, i in points)]
+              '  I ' + ' '.join(f'{i*scale:.6g}' for _, i in points)]
     if solvent:
         lines.append(f'  solvent {solvent}')
     lines.append('')
@@ -104,6 +104,12 @@ def main():
                     help='sphere radius in Angstrom, stored as a comment for '
                          'reference (the DirectLoad I(Q) already includes the '
                          'form factor; default: %(default)s)')
+    ap.add_argument('--scale', type=float, default=1.0,
+                    help='factor applied to the I values. Use this for unit '
+                         'conversion: SasView reports I in barn per OBJECT '
+                         '(per particle), while NCrystal expects barn per '
+                         'ATOM, i.e. scale = n_particles_per_A3 / n_atoms_per_A3 '
+                         'of the target material (default: %(default)s)')
     ap.add_argument('--solvent', default='',
                     help='solvent material name, stored as a comment for '
                          'reference (DirectLoad I(Q) already includes solvent '
@@ -112,7 +118,7 @@ def main():
 
     points = read_sasview_iq(args.sasview_file)
     write_ncmat(args.output, points, args.material, args.density,
-                args.radius, args.solvent)
+                args.radius, args.solvent, args.scale)
     print(f'Wrote {args.output} with {len(points)} (Q,I) points from '
           f'{args.sasview_file}')
     print('Load it with NCrystal, e.g.:  nctool '
