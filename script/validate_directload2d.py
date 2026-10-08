@@ -28,9 +28,12 @@
 #   - I(Qx,Qy) [barn/(atom sr)] on a uniform ascending grid in the material
 #     frame; bilinear; I = 0 outside; Qx = Q.x-hat, Qy = Q.y-hat with
 #     Q = kf - ki (wave-vector transfer, k = sqrt(E/2.07214meV) = 2pi/lambda).
-#   - elastic; outcomes restricted to the upper hemisphere kf.z > 0 (the
-#     detector side of the qz=0 plane; the plane projection of the elastic
-#     sphere is 2:1 and the data describes only one side).
+#   - elastic; outcomes live on the FULL elastic sphere. Each plane point
+#     (Qx,Qy) inside the disc has TWO elastic preimages (kf.z = +-sqrt)/k
+#     with equal solid angle dA/(k^2*|kf.z|): the model extends the qz=0
+#     dataset to the backward branch by mirror symmetry (exact for
+#     z-symmetric structures and in both closed-form limits:
+#     constant table -> 4*pi*I0, E->0 -> 4*pi*I(0)).
 #   - sigma(ki,E) = double integral over the plane disc
 #     D = {(Qx+ka_x)^2+(Qy+ka_y)^2 <= k^2} of I/(k^2*|kf.z|) dA. With
 #     rho = k*sin(alpha) this is exactly
@@ -130,8 +133,8 @@ def sigma_table(tab, ki, k, nalpha=400, nphi=720):
     ax, ay, _ = ki
     cx, cy = -k * ax, -k * ay
     xg, wg = np.polynomial.legendre.leggauss(nalpha)
-    alpha = 0.25 * math.pi * (xg + 1.0)          # [0, pi/2]
-    wa = 0.25 * math.pi * wg
+    alpha = 0.5 * math.pi * (xg + 1.0)           # [0, pi]: full sphere
+    wa = 0.5 * math.pi * wg
     phi = (np.arange(nphi) + 0.5) * (2 * math.pi / nphi)
     A, P = np.meshgrid(alpha, phi, indexing='ij')
     Qx = cx + k * np.sin(A) * np.cos(P)
@@ -145,8 +148,8 @@ def sigma_cont_generic(func, ki, k, nalpha=600, nphi=1080):
     ax, ay, _ = ki
     cx, cy = -k * ax, -k * ay
     xg, wg = np.polynomial.legendre.leggauss(nalpha)
-    alpha = 0.25 * math.pi * (xg + 1.0)
-    wa = 0.25 * math.pi * wg
+    alpha = 0.5 * math.pi * (xg + 1.0)           # [0, pi]: full sphere
+    wa = 0.5 * math.pi * wg
     phi = (np.arange(nphi) + 0.5) * (2 * math.pi / nphi)
     A, P = np.meshgrid(alpha, phi, indexing='ij')
     Qx = cx + k * np.sin(A) * np.cos(P)
@@ -156,12 +159,13 @@ def sigma_cont_generic(func, ki, k, nalpha=600, nphi=1080):
 
 
 def plane_target_weight(tab, ki, k, Qx, Qy):
-    """Unnormalised exact target density over plane points: I/|kf.z|."""
+    """Unnormalised exact target density over plane points: 2*I/|kf.z|
+    (two elastic branches preimage each plane point)."""
     ax, ay, _ = ki
     rho2 = (Qx + k * ax) ** 2 + (Qy + k * ay) ** 2
     with np.errstate(invalid='ignore', divide='ignore'):
         kfz = np.sqrt(np.clip(k * k - rho2, 0.0, None)) / k
-        w = np.where(kfz > 0, tab.eval(Qx, Qy) / np.maximum(kfz, 1e-300), 0.0)
+        w = np.where(kfz > 0, 2 * tab.eval(Qx, Qy) / np.maximum(kfz, 1e-300), 0.0)
     return w
 
 
@@ -176,13 +180,13 @@ class AngularCDF:
 
     def __init__(self, tab, k, nth=192, npsi=384, dilate_r=0.0):
         src = tab.dilated(dilate_r) if dilate_r > 0 else tab
-        th = (np.arange(nth) + 0.5) * (0.5 * math.pi / nth)
+        th = (np.arange(nth) + 0.5) * (math.pi / nth)
         ps = (np.arange(npsi) + 0.5) * (2 * math.pi / npsi)
         T, P = np.meshgrid(th, ps, indexing='ij')
         Qx = k * np.sin(T) * np.cos(P)
         Qy = k * np.sin(T) * np.sin(P)
         f = src.eval(Qx.ravel(), Qy.ravel()).reshape(T.shape) * np.sin(T)
-        self.dth = 0.5 * math.pi / nth
+        self.dth = math.pi / nth
         self.dps = 2 * math.pi / npsi
         self.k = k
         mass = f * self.dth * self.dps
@@ -206,7 +210,7 @@ class AngularCDF:
 
 
 def sample_baseline(tab, ki, k, rng, n, oversample=16):
-    """Obviously-correct rejection sampler: uniform on the upper hemisphere,
+    """Obviously-correct rejection sampler: uniform on the full sphere,
     accept with prob I(plane projection)/I_max. Independent of all model code
     (acceptance can be small for peaked tables; tests use it at moderate
     acceptance or with generous draws)."""
@@ -215,7 +219,7 @@ def sample_baseline(tab, ki, k, rng, n, oversample=16):
     got = 0
     while got < n:
         m = max(int((n - got) * oversample * 1.5), 4096)
-        z = rng.random(m)
+        z = 2.0 * rng.random(m) - 1.0
         phi = 2 * math.pi * rng.random(m)
         r = np.sqrt(1 - z * z)
         kf = np.stack([r * np.cos(phi), r * np.sin(phi), z], axis=1)
@@ -273,7 +277,7 @@ def chi2_angular(tab, ki, k, kf, nbins=30, nquad=24):
     Gauss-Legendre per bin converges fast. Works for tilted beams too."""
     th = np.arctan2(np.hypot(kf[:, 0], kf[:, 1]), kf[:, 2])
     ps = np.arctan2(kf[:, 1], kf[:, 0])
-    thb = np.linspace(0.0, 0.5 * math.pi, nbins + 1)
+    thb = np.linspace(0.0, math.pi, nbins + 1)
     psb = np.linspace(-math.pi, math.pi, nbins + 1)
     xg, xw = np.polynomial.legendre.leggauss(nquad)
     yg, yw = np.polynomial.legendre.leggauss(nquad)
@@ -330,7 +334,7 @@ def case_constant():
                   np.full((401, 401), I0), 'const')
     ki = (0.0, 0.0, 1.0)
     sig = sigma_table(tab, ki, k)
-    rows.append(('S1 constant table: sigma = 2*pi*I0', 2 * math.pi * I0, sig, 'rel', 1e-6))
+    rows.append(('S1 constant table: sigma = 4*pi*I0', 4 * math.pi * I0, sig, 'rel', 1e-6))
 
     cdf = AngularCDF(tab, k)
     rows.append(('S1 sampling-grid sigma consistency (angular CDF vs quad)',
@@ -340,16 +344,16 @@ def case_constant():
     kf = cdf.sample_kf(rng, 200_000)
     rows.append(('S1 angular-CDF outcomes: max ||kf|-1| (elasticity)', 0.0,
                  float(np.abs(np.linalg.norm(kf, axis=1) - 1.0).max()), 'near', 1e-12))
-    z = np.clip(kf[:, 2], 0.0, 1.0)
-    cnt, _ = np.histogram(z, bins=20, range=(0, 1))
+    z = np.clip(kf[:, 2], -1.0, 1.0)
+    cnt, _ = np.histogram(z, bins=20, range=(-1, 1))
     c2, p = chi2_1d(cnt, np.full(20, z.size / 20), z.size)
-    rows.append(('S1 angular-CDF outcomes uniform on hemisphere (p)', 0.01, p, 'p', None))
+    rows.append(('S1 angular-CDF outcomes uniform on sphere (p)', 0.01, p, 'p', None))
 
     kf2 = sample_baseline(tab, ki, k, np.random.default_rng(12), 100_000)
-    z2 = np.clip(kf2[:, 2], 0.0, 1.0)
-    cnt2, _ = np.histogram(z2, bins=20, range=(0, 1))
+    z2 = np.clip(kf2[:, 2], -1.0, 1.0)
+    cnt2, _ = np.histogram(z2, bins=20, range=(-1, 1))
     c2b, pb = chi2_1d(cnt2, np.full(20, z2.size / 20), z2.size)
-    rows.append(('S1 baseline outcomes uniform on hemisphere (p)', 0.01, pb, 'p', None))
+    rows.append(('S1 baseline outcomes uniform on sphere (p)', 0.01, pb, 'p', None))
     return rows
 
 
@@ -366,8 +370,8 @@ def case_zero_energy():
     k = k_of_e(e)
     ki = np.array([0.6, -0.5, 1.1]); ki /= np.linalg.norm(ki)
     sig = sigma_table(tab, ki, k)
-    rows.append(('S2 E->0 limit (anisotropic table, tilted beam): sigma = 2*pi*I(0)',
-                 2 * math.pi * tab.q0(), sig, 'rel', 1e-4))
+    rows.append(('S2 E->0 limit (anisotropic table, tilted beam): sigma = 4*pi*I(0)',
+                 4 * math.pi * tab.q0(), sig, 'rel', 1e-4))
     return rows
 
 
@@ -387,13 +391,16 @@ def case_single_pixel():
     ki = (0.0, 0.0, 1.0)
     kfz0 = math.sqrt(1.0 - (0.3 ** 2 + 0.15 ** 2))
     sig = sigma_table(tab, ki, k, nalpha=1200, nphi=2400)
-    rows.append(('S4 single pixel: sigma vs leading order I0*dA/(k^2*|kf.z|)',
-                 I0 * h * h / (k * k * kfz0), sig, 'rel', 0.05))
-    cdf = AngularCDF(tab, k, nth=256, npsi=512)
+    rows.append(('S4 single pixel: sigma vs 2*I0*dA/(k^2*|kf.z|) (2 branches)',
+                 2 * I0 * h * h / (k * k * kfz0), sig, 'rel', 0.05))
+    cdf = AngularCDF(tab, k, nth=384, npsi=768)
     kf = cdf.sample_kf(np.random.default_rng(21), 20_000)
     kf0 = np.array([0.3, -0.15, kfz0])
-    frac = float((np.linalg.norm(kf - kf0, axis=1) < 3 * h / k).mean())
-    rows.append(('S4 single pixel: outcomes cluster at predicted kf (frac<3h/k)',
+    # two elastic branches preimage the pixel: kf0 and its z-mirror
+    d = np.minimum(np.linalg.norm(kf - kf0, axis=1),
+                   np.linalg.norm(kf - kf0 * np.array([1, 1, -1]), axis=1))
+    frac = float((d < 3 * h / k).mean())
+    rows.append(('S4 pixel: outcomes cluster at the 2 predicted kf (frac<3h/k)',
                  0.98, frac, 'p', None))
     return rows
 
