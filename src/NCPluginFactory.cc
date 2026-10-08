@@ -42,6 +42,14 @@ NC::Priority NCP::PluginFactory::query( const NC::FactImpl::ScatterRequest& req 
   //Respect the "sans" parameter, which allows users to disable SANS models:
   if ( ! req.get_sans() )
     return NC::Priority::Unable;
+  //The model below can only deal with single-phase Info objects (it reads its
+  //@CUSTOM_SASCSNS section via Info::countCustomSections, which throws on
+  //multi-phase Info objects). Decline multi-phase requests here so that such
+  //materials (e.g. files with @OTHERPHASES, including those using the builtin
+  //@CUSTOM_HARDSPHERESANS section) keep working, served by NCrystal's own
+  //multi-phase capable SANS factories instead:
+  if ( req.isMultiPhase() )
+    return NC::Priority::Unable;
   if ( ! SansModelPicker::isApplicable(req.info()) )
     return NC::Priority::Unable;
   return NC::Priority{999};
