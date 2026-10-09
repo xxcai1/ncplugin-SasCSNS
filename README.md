@@ -3,7 +3,7 @@
 A [NCrystal](https://github.com/mctools/ncrystal) plugin providing
 general-purpose **small-angle neutron scattering (SANS) models** for
 particle transport. See the wiki page for more information.
-https://github.com/xxcai1/ncplugin-SasCSNS/wiki
+https://code.ihep.ac.cn/cinema-developers/ncplugin-sascsns/-/blob/main/doc/wiki/home.md
 
 ## Model types (`@CUSTOM_SASCSNS` NCMAT section)
 
@@ -20,7 +20,7 @@ neutrons through it numerically.
 
 ## Conversion tool
 
-`script/sasview2ncmat.py` converts SasView 1D (`--1d`) and 2D (`--2d`)
+`script/sasview2ncmat.py` converts SasView 1D (default) and 2D (`--2d`)
 ASCII exports to NCMAT files, applying the mandatory
 `barn/object -> barn/atom` unit conversion always and automatically.
 
@@ -36,6 +36,7 @@ Run from the repo root with the NCrystal+plugin environment active
 ```
 python script/validate_directload2d.py    # rungs 2-3: python model vs closed forms (29 checks)
 python script/validate_plugin_2d.py       # rung 4: C++ plugin vs reference (32 checks)
+python script/validate_hard_sphere_equiv.py  # rung 4b: constant table = hard sphere, sigma = 4*pi*I0 (15 checks)
 python script/validate_1d_vs_2d.py        # rung 7: cross-model consistency + conventions (7 checks)
 python script/example_sasview_chain.py    # rung 6 (1D): full SasView chain
 python script/example_sasview_chain_2d.py # rung 6 (2D): full SasView chain + figure data
