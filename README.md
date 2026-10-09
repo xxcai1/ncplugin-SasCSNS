@@ -29,7 +29,7 @@ ASCII exports to NCMAT files, applying the mandatory
 The models are validated by a special-case harness ("validation
 ladder", 8 rungs, all passing); the design doctrine and every measured
 number are documented in
-[`doc/anisotropic_directload2d.pdf`](doc/anisotropic_directload2d.pdf).
+[`doc/anisotropic_directload2d.pdf`](https://code.ihep.ac.cn/cinema-developers/ncplugin-sascsns/-/blob/main/doc/anisotropic_directload2d.pdf).
 Run from the repo root with the NCrystal+plugin environment active
 (`python` must see the plugin, i.e. `pip install .` first):
 
