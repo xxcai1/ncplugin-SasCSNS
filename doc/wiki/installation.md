@@ -45,7 +45,10 @@ That is the whole install: the README instructs to "Run from the repo root with 
 ncrystal_plugin_SasCSNS/
 ├── __init__.py
 ├── plugins/libNCPlugin_SasCSNS.so   # the compiled plugin
-└── data/sascsns_sio2_spheres.ncmat  # bundled example data file
+└── data/                          # bundled example data files:
+     sascsns_sio2_spheres.ncmat    #   HardSphere + DirectLoad walkthrough file
+     sascsns_guinier2d.ncmat       #   DirectLoad2D, Guinier law (rung 4c)
+     sascsns_oz2d.ncmat            #   DirectLoad2D, Zimm/OZ (rung 4c)
 ```
 
 The plugin name is the single line of [ncplugin_name.txt](https://code.ihep.ac.cn/cinema-developers/ncplugin-sascsns/-/blob/main/ncplugin_name.txt) (`SasCSNS`); CMake aborts the build if it disagrees with the `ncrystal-plugin-SasCSNS` project name in `pyproject.toml`.
