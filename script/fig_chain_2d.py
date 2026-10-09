@@ -3,7 +3,8 @@
 # fig_chain_2d.py - figure for doc/anisotropic_directload2d.pdf (rung 6):
 # the anisotropic I(Qx,Qy) input image of the 2D chain demo (tilted cylinder)
 # next to the (Qx,Qy) distribution of outcomes sampled by the C++ plugin from
-# it. Log colour scale, same contours in both panels: the sampler reproduces
+# it. Linear colour scale (SasView-style), same contours in both panels: the
+# sampler reproduces
 # the anisotropic pattern -- shape-level proof that it survives the whole
 # SasView -> NCMAT -> NCrystal chain.
 # -----------------------------------------------------------------------------
@@ -22,7 +23,6 @@ OUT = os.path.join(HERE, '..', 'doc', 'fig_chain_2d.pdf')
 import matplotlib  # noqa: E402
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt  # noqa: E402
-from matplotlib.colors import LogNorm  # noqa: E402
 
 if not os.path.exists(NCMAT):
     subprocess.run([sys.executable, os.path.join(HERE, 'example_sasview_chain_2d.py')],
@@ -74,10 +74,11 @@ ye = np.append(qy1 - dy / 2, qy1[-1] + dy / 2)
 Hh, _, _ = np.histogram2d(QX, QY, bins=[xe, ye])
 P_out = Hh.T / Hh.sum() / dA          # qy outer to match panel (a)
 
+WIN = 0.5                    # display window around the pattern /Aa
 mask = P_in > 0
-vlo, vhi = P_in[mask].min(), P_in[mask].max()
-norm = LogNorm(vmin=vlo * 0.5, vmax=vhi)
-lv = [vlo * f for f in (3, 30, 300, 3000)]
+Pk = P_in[mask].max()
+norm = None                        # linear colour scale, SasView-style
+lv = [Pk * f for f in (0.02, 0.1, 0.3, 0.6, 0.9)]
 
 fig, axes = plt.subplots(1, 2, figsize=(9.6, 4.35), sharey=True)
 fig.subplots_adjust(left=0.07, right=0.86, top=0.86, bottom=0.14, wspace=0.06)
@@ -87,6 +88,8 @@ im = ax.pcolormesh(qx1, qy1, np.where(mask, P_in, np.nan),
                    norm=norm, cmap='viridis', shading='nearest')
 ax.contour(qx1, qy1, np.where(mask, P_in, np.nan), levels=lv,
            colors='k', linewidths=0.6)
+ax.set_xlim(-WIN, WIN)
+ax.set_ylim(-WIN, WIN)
 ax.set_title(r'input density $I(Q_x,Q_y)/\!\int I$ (cylinder at $30^\circ$)',
              fontsize=10)
 ax.set_xlabel(r'$Q_x$ [$\mathrm{\AA}^{-1}$]')
@@ -99,11 +102,13 @@ ax.pcolormesh(qx1, qy1, np.where(mout, P_out, np.nan),
 #overlay the INPUT contours (white) to make pattern agreement visible
 ax.contour(qx1, qy1, np.where(mask, P_in, np.nan), levels=lv,
            colors='k', linewidths=0.6)
+ax.set_xlim(-WIN, WIN)
+ax.set_ylim(-WIN, WIN)
 ax.set_title(r'sampled outcome density, 2M events', fontsize=10)
 ax.set_xlabel(r'$Q_x$ [$\mathrm{\AA}^{-1}$]')
 
 cbar = fig.colorbar(im, ax=axes, shrink=0.92, pad=0.02)
-cbar.set_label(r'probability density per $\mathrm{\AA}^2$ (log)', fontsize=9)
+cbar.set_label(r'probability density per $\mathrm{\AA}^2$', fontsize=9)
 fig.savefig(OUT, bbox_inches='tight')
 try:
     fig.savefig('/tmp/fig_chain_2d_preview.png', dpi=110, bbox_inches='tight')
