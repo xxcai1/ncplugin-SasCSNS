@@ -36,3 +36,6 @@ __pycache__/
 vgcore.*
 rundir
 build-conda/
+
+# compiled paper PDF: build artifact, never in git (fig_*.pdf inputs stay tracked)
+doc/anisotropic_directload2d.pdf
