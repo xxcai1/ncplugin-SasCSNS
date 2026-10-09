@@ -53,7 +53,7 @@ qperp = np.sqrt(X**2 * math.cos(TILT)**2 + Y**2)
 x, rod = qperp * RADIUS, qpar * LENGTH / 2.0
 f_disc = np.where(x > 1e-6, np.sinc(x / math.pi), 1.0)      # 2*J1(x)/x
 f_rod = np.where(np.abs(rod) > 1e-6, np.sinc(rod / math.pi), 1.0)
-I_img = V_P**2 * DELTA_RHO**2 * f_disc**2 * f_rod**2
+I_img = V_P**2 * DELTA_RHO**2 * 1.0e8 * f_disc**2 * f_rod**2  # x1e8: Aa^2 -> barn/object (no effect here: panels are normalised)
 
 #--- sample outcomes and map them back to (Qx,Qy) -----------------------------
 sc = NCrystal.createScatter(NCMAT + ';dcutoff=0')

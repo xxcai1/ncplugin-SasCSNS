@@ -37,6 +37,7 @@ Run from the repo root with the NCrystal+plugin environment active
 python script/validate_directload2d.py    # rungs 2-3: python model vs closed forms (29 checks)
 python script/validate_plugin_2d.py       # rung 4: C++ plugin vs reference (32 checks)
 python script/validate_hard_sphere_equiv.py  # rung 4b: constant table = hard sphere, sigma = 4*pi*I0 (15 checks)
+python script/validate_physical_closedforms.py  # rung 4c: Guinier + Zimm/OZ closed-form sigma, both models (30 checks)
 python script/validate_1d_vs_2d.py        # rung 7: cross-model consistency + conventions (7 checks)
 python script/example_sasview_chain.py    # rung 6 (1D): full SasView chain
 python script/example_sasview_chain_2d.py # rung 6 (2D): full SasView chain + figure data

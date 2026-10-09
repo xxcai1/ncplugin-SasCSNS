@@ -48,8 +48,10 @@ V_P = math.pi * RADIUS**2 * LENGTH           # Aa^3
 n_mol_cm3 = DENSITY / M_SIO2 * 6.022140857e23
 n_atoms = n_mol_cm3 * 3.0 * 1.0e-24          # atoms per Aa^3
 # cylinder contrast: dry silica in vacuum. SasView per-object intensity,
-# I = V_p^2 * (delta_rho)^2 * F^2, comes out in Aa^2 = barn per object:
+# I = V_p^2 * (delta_rho)^2 * F^2, comes out in Aa^2; 1 barn = 1e-8 Aa^2,
+# so the factor below is what makes it barn per object (same as the 1D demo):
 delta_rho = 3.475e-6                         # 1/Aa^2 (same SLD as 1D example)
+BARN_PER_AA2 = 1.0e8                         # 1 barn = 1e-8 Aa^2
 
 #--- 1. emulate a SasView 2D export ------------------------------------------
 NQ = 161
@@ -59,7 +61,7 @@ qy = np.linspace(-QMAX, QMAX, NQ)
 
 
 def form_factor_image(qx, qy):
-    """Per-object F^2 image for the tilted cylinder (barn/object at F^2=1)."""
+    """Per-object F^2 image for the tilted cylinder [barn/object] at F^2=1."""
     qxx, qyy = np.meshgrid(qx, qy, indexing='xy')   # [ny,nx], qy outer
     qpar = qxx * math.sin(TILT)                      # Q.(axis) with Qz=0
     qperp2 = qxx**2 * math.cos(TILT)**2 + qyy**2
@@ -72,7 +74,7 @@ def form_factor_image(qx, qy):
     f_rod = np.ones_like(rod)
     nz2 = np.abs(rod) > 1e-6
     f_rod[nz2] = np.sin(rod[nz2]) / rod[nz2]
-    return V_P**2 * delta_rho**2 * f_disc**2 * f_rod**2
+    return V_P**2 * delta_rho**2 * BARN_PER_AA2 * f_disc**2 * f_rod**2
 
 
 I_object = form_factor_image(qx, qy)
@@ -80,7 +82,7 @@ I_object = form_factor_image(qx, qy)
 os.makedirs(WORK, exist_ok=True)
 raw = os.path.join(WORK, 'cylinder2d_sasview_export.dat')
 with open(raw, 'w') as fh:
-    fh.write('# Qx (1/Aa)  Qy (1/Aa)  I (1/cm)\n')
+    fh.write('# Qx (1/Aa)  Qy (1/Aa)  I (barn/object)\n')
     for iy in range(NQ):
         for ix in range(NQ):
             fh.write(f'{qx[ix]:.8g} {qy[iy]:.8g} {I_object[iy, ix]:.8g}\n')

@@ -60,7 +60,7 @@ def read_sasview_iq(filename):
     bad = [(q, i) for q, i in points if not (q > 0.0 and i > 0.0)]
     if bad:
         print(f'WARNING: dropped {len(bad)} of {len(points)} data points with '
-              f'Q<=0, I<=0 or non-finite values (first: Q={bad[0][0]!r} I={bad[0][1]!r})')
+              f'Q<=0, I<=0 or NaN values (first: Q={bad[0][0]!r} I={bad[0][1]!r})')
     points = sorted((q, i) for q, i in points if q > 0.0 and i > 0.0)
     deduped = []
     n_dup = 0
@@ -222,7 +222,7 @@ def write_ncmat_2d(out, qx, qy, vals, material, density, solvent, scale):
     for b in range(per_line, len(flat), per_line):
         lines.append('    ' + ' '.join(flat[b:b + per_line]))
     if solvent:
-        lines.append(f'  solvent {solvent}')
+        lines.append(f'  # solvent: {solvent}')
     lines.append('')
     with open(out, 'w') as fh:
         fh.write('\n'.join(lines))
@@ -288,7 +288,7 @@ def write_ncmat(out, points, material, density, radius, solvent, scale):
               '  Q ' + ' '.join(f'{q:.12g}' for q, _ in points),
               '  I ' + ' '.join(f'{i * scale:.8g}' for _, i in points)]
     if solvent:
-        lines.append(f'  solvent {solvent}')
+        lines.append(f'  # solvent: {solvent}')
     lines.append('')
     with open(out, 'w') as fh:
         fh.write('\n'.join(lines))
@@ -388,7 +388,7 @@ def main():
           f'({args.phi:g}/{v_p:.6g})/{n_d:.6g} = {scale:.8g} '
           f'[barn/object -> barn/atom]')
     print('Load it with NCrystal, e.g.:  nctool '
-          f'{args.output} -x 1e-5 1.0 -p')
+          f'{args.output} -x 1e-5:1.0 -p')
 
 
 def main_2d(args):
@@ -441,7 +441,7 @@ def main_2d(args):
           f'({args.phi:g}/{v_p:.6g})/{n_d:.6g} = {scale:.8g} '
           f'[barn/object -> barn/atom]')
     print('Load it with NCrystal, e.g.:  nctool '
-          f'{args.output} -x 1e-5 1.0 -p')
+          f'{args.output} -x 1e-5:1.0 -p')
 
 
 if __name__ == '__main__':
