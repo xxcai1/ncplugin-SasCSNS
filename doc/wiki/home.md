@@ -100,4 +100,5 @@ The doctrine and every measured number are on the [Validation](validation) page.
 | [Tutorial: 1D models](tutorial-1d) | End-to-end walkthrough: SasView 1D export, `sasview2ncmat.py` (1D is the default; `--2d` selects 2D), `DirectLoad` transport via the NCrystal Python API. |
 | [Tutorial: 2D models](tutorial-2d) | End-to-end walkthrough: 2D export, `sasview2ncmat.py --2d`, anisotropic `DirectLoad2D` transport. |
 | [Data format](data-format) | The `@CUSTOM_SASCSNS` grammar for `DirectLoad` and `DirectLoad2D`, the stored units, and what the converter does and checks. |
+| [Cross section of the 2D model](cross-section-2d) | The mathematics of `DirectLoad2D`: how `σ(k̂_i,E)` is integrated from the 2D image `I(Qx,Qy)` — symbol glossary and the five-step derivation. |
 | [Validation](validation) | The eight-rung validation ladder: doctrine, the special-case harness, and commands. |
